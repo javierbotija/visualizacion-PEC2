@@ -101,7 +101,7 @@
 			      .append("g")
 			      .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
 
-			    // create the spiral, borrowed from http://bl.ocks.org/syntagmatic/3543186
+			    // create the spiral
 			    var points = d3.range(start, end + 0.001, (end - start) / 1000);
 
 			    var spiral = d3.radialLine()
@@ -134,7 +134,7 @@
 			      })])
 			      .range([0, (r / numSpirals) - 30]);
 
-			    // append our rects
+			    // add rects
 			    svg.selectAll("rect")
 			      .data(someData)
 			      .enter()
@@ -166,13 +166,12 @@
 			      .attr("fill", function(d){
 			        return d.color;
 			      })
-			      //.style("fill", "steelblue")
 			      .style("stroke", "none")
 			      .attr("transform", function(d){
 			        return "rotate(" + d.a + "," + d.x  + "," + d.y + ")"; // rotate the bar
 			      });
 			    
-			    // add date labels
+			    // add month labels
 			    var tF = d3.timeFormat("%b %Y"),
 			        firstInMonth = {};
 			    svg.selectAll("text")
