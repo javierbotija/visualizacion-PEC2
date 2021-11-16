@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+	<script data-require="d3@4.0.0" data-semver="4.0.0" src="https://d3js.org/d3.v4.js"></script>
+</head>
+<body>
+	<h1>Spiral Plot - Ingresos en diarios en servicio de Urgenias - Comunidad Autónoma de Canarias</h1>
+
+	<form id="csvFileForm">
+		<label for="csvFile">Cargar csv datos: </label>
+		<input type="file" id="csvFile" accept=".csv" />
+		<br/>
+		<input type="submit" value="Generar gráfica" />
+	</form>
+
+	<div id="Spiral"></div>
+
+	<script>
+		const bind = () => {
+
+		    const csvFileForm = document.getElementById("csvFileForm");
+		    const csvFile = document.getElementById("csvFile");
+
+		    csvFileForm.addEventListener("submit", function (e) {
+		      
+		      e.preventDefault();
+
+		      const input = csvFile.files[0];
+		      const reader = new FileReader();
+
+		      reader.onload = function (e) {
+		        const text = e.target.result;
+		        const rows = text.split(/\r\n|\n/)
+		        // _prepareData(rows)
+		        let data = prepareData(rows)
+		        d3chart(data)
+		      };
+
+		      reader.readAsText(input);
+		    });
+		}
+
+		const prepareData = (data) => {
+			let output = []
+			data.map(line => {
+				let sline = line.split(",")
+				let valid = false
+				if (sline.length===5) {
+					// let date = sline[0] // siempre la misma fecha
+					let sdate = sline[2] // para probar
+					let value = sline[4]
+					if (sdate.match(/[0-9]{2}\/[0-9]{2}\/[0-9]{4}/g) && value.match(/[0-9]+/g)) {
+						let date = new Date(
+							Number(sdate.substring(6)),
+							Number(sdate.substring(3,5))-1,
+							Number(sdate.substring(0,2)))
+						let color = "steelblue"
+
+						if (date.getDay()===0 || date.getDay()===6) color = "red" 
+
+						let f = output.find(x=>x.id===sdate)
+
+						if (!f) output.push({"id": sdate, "date": date, "color": color, "value": Number(value)})
+						else {
+							f.value = f.value + Number(value)
+						}
+						valid = true
+					}
+				}
+				if (!valid) {
+					console.log(`"${line}" -> line not valid!`)
+				}
+			})
+			console.log(output)
+
+			return output
+		}
+
+		const d3chart = (someData) => {
+			    var width = 700,
+			      height = 700,
+			      start = 0,
+			      end = 2.25,
+			      numSpirals = 4;
+
+			    var theta = function(r) {
+			      return numSpirals * Math.PI * r;
+			    };
+
+			    var r = d3.min([width, height]) / 2 - 40;
+
+			    var radius = d3.scaleLinear()
+			      .domain([start, end])
+			      .range([40, r]);
+
+			    var svg = d3.select("#Spiral").append("svg")
+			      .attr("width", width)
+			      .attr("height", height)
+			      .append("g")
+			      .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+			    // create the spiral, borrowed from http://bl.ocks.org/syntagmatic/3543186
+			    var points = d3.range(start, end + 0.001, (end - start) / 1000);
+
+			    var spiral = d3.radialLine()
+			      .curve(d3.curveCardinal)
+			      .angle(theta)
+			      .radius(radius);
+
+			    var path = svg.append("path")
+			      .datum(points)
+			      .attr("id", "spiral")
+			      .attr("d", spiral)
+			      .style("fill", "none")
+			      .style("stroke", "steelblue");
+
+			    var spiralLength = path.node().getTotalLength(),
+			        N = someData.length,
+			        barWidth = (spiralLength / N) - 1;
+			    
+			    // here's our time scale that'll run along the spiral
+			    var timeScale = d3.scaleTime()
+			      .domain(d3.extent(someData, function(d){
+			        return d.date;
+			      }))
+			      .range([0, spiralLength]);
+			    
+			    // yScale for the bar height
+			    var yScale = d3.scaleLinear()
+			      .domain([0, d3.max(someData, function(d){
+			        return d.value;
+			      })])
+			      .range([0, (r / numSpirals) - 30]);
+
+			    // append our rects
+			    svg.selectAll("rect")
+			      .data(someData)
+			      .enter()
+			      .append("rect")
+			      .attr("x", function(d,i){
+			        
+			        // placement calculations
+			        var linePer = timeScale(d.date),
+			            posOnLine = path.node().getPointAtLength(linePer),
+			            angleOnLine = path.node().getPointAtLength(linePer - barWidth);
+			      
+			        d.linePer = linePer; // % distance are on the spiral
+			        d.x = posOnLine.x; // x postion on the spiral
+			        d.y = posOnLine.y; // y position on the spiral
+			        
+			        d.a = (Math.atan2(angleOnLine.y, angleOnLine.x) * 180 / Math.PI) - 90; //angle at the spiral position
+
+			        return d.x;
+			      })
+			      .attr("y", function(d){
+			        return d.y;
+			      })
+			      .attr("width", function(d){
+			        return barWidth;
+			      })
+			      .attr("height", function(d){
+			        return yScale(d.value);
+			      })
+			      .attr("fill", function(d){
+			        return d.color;
+			      })
+			      //.style("fill", "steelblue")
+			      .style("stroke", "none")
+			      .attr("transform", function(d){
+			        return "rotate(" + d.a + "," + d.x  + "," + d.y + ")"; // rotate the bar
+			      });
+			    
+			    // add date labels
+			    var tF = d3.timeFormat("%b %Y"),
+			        firstInMonth = {};
+			    svg.selectAll("text")
+			      .data(someData)
+			      .enter()
+			      .append("text")
+			      .attr("dy", 10)
+			      .style("text-anchor", "start")
+			      .style("font", "10px arial")
+			      .append("textPath")
+			      // only add for the first of each month
+			      .filter(function(d){
+			        var sd = tF(d.date);
+			        if (!firstInMonth[sd]){
+			          firstInMonth[sd] = 1;
+			          return true;
+			        }
+			        return false;
+			      })
+			      .text(function(d){
+			        return tF(d.date);
+			      })
+			      // place text along spiral
+			      .attr("xlink:href", "#spiral")
+			      .style("fill", "grey")
+			      .attr("startOffset", function(d){
+			        return ((d.linePer / spiralLength) * 100) + "%";
+			      })
+		}
+
+		bind();
+	</script>
+
+
+  <script>
+
+
+  </script>	
+</body>
